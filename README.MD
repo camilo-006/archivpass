@@ -25,7 +25,6 @@ Sistema de respaldo corporativo e inteligente desarrollado en Python. La aplicac
 * **Interfaz Gráfica:** Tkinter / TTK
 * **Módulos del Sistema:** `os`, `shutil`, `threading`, `datetime`, `ctypes`
 * **Empaquetado:** PyInstaller
-
 ---
 
 ## Instalación y Uso
@@ -45,7 +44,7 @@ python archivpasss.py
 
 ### 3. complilar el ejecutable (.exe)
 
-pip install pyinstaller
+pip install pyinstaller \
 pyinstaller --noconsole --onefile --add-data "icono.png;." archivpasss.py
 
 ## estructura del proyecto
