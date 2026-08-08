@@ -50,7 +50,7 @@ pyinstaller --noconsole --onefile --add-data "icono.png;." archivpasss.py
 ## estructura del proyecto
 
 archivpass/ \
-│
+│ \
 ├── archivpasss.py      # Código fuente principal de la aplicación \
 ├── icono.png           # Recurso gráfico para el ícono de la interfaz \
 ├── .gitignore          # Exclusión de archivos temporales y compilados \
