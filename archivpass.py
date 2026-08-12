@@ -98,8 +98,23 @@ class AppBackupCorporativoElite(ctk.CTk):
         self.EXTENSIONES_OFFICE_WORD = ['.doc', '.docx', '.odt']
         self.EXTENSIONES_OFFICE_EXCEL = ['.xls', '.xlsx', '.csv', '.ods']
         self.EXTENSIONES_OFFICE_PPT = ['.ppt', '.pptx', '.odp']
-        self.EXTENSIONES_OFFICE_PDF = ['.pdf', '.epub']
-        self.EXTENSIONES_OFFICE_TXT = ['.txt', '.rtf', '.log']
+
+        self.EXTENSIONES_PDF = ['.pdf', '.epub']
+        self.EXTENSIONES_TXT = ['.txt', '.rtf', '.log']
+
+        #suite de adobe
+        self.EXTENSIONES_ADOBE_PHOTOSHOP = ['.psd', '.psb']
+        self.EXTENSIONES_ADOBE_ILLUSTRATOR = ['.ai', '.ait', '.eps']
+        self.EXTENSIONES_ADOBE_INDESIGN = ['.indd', '.indt', '.idml']
+        self.EXTENSIONES_ADOBE_ACROBAT = ['.pdf']
+        self.EXTENSIONES_ADOBE_PREMIERE = ['.prproj']
+        self.EXTENSIONES_ADOBE_AFTER_EFFECTS = ['.aep', '.aet']
+        self.EXTENSIONES_ADOBE_AUDITION = ['.sesx']
+        self.EXTENSIONES_ADOBE_LIGHTROOM = ['.lrcat', '.dng']
+        self.EXTENSIONES_ADOBE_XD = ['.xd']
+        self.EXTENSIONES_ADOBE_ANIMATE = ['.fla', '.xfl']
+
+        self.EXTENSIONES_AUTODESK_AUTOCAD = ['.dwg', '.dxf', '.dwt', '.dwf']
 
         self.EXTENSIONES_EJECUTABLES = ['.exe', '.msi', '.bat', '.cmd', '.iso', '.ps1']
         self.EXTENSIONES_ACCESOS = ['.lnk', '.url']
@@ -408,10 +423,44 @@ class AppBackupCorporativoElite(ctk.CTk):
             return os.path.join("Archivos Office", "Excel", anio)
         elif ext in self.EXTENSIONES_OFFICE_PPT:
             return os.path.join("Archivos Office", "PowerPoint", anio)
-        elif ext in self.EXTENSIONES_OFFICE_PDF:
-            return os.path.join("Archivos Office", "PDF y Lectura", anio)
-        elif ext in self.EXTENSIONES_OFFICE_TXT:
-            return os.path.join("Archivos Office", "Texto Plano", anio)
+        
+        elif ext in self.EXTENSIONES_PDF:
+            return os.path.join("PDF y texto","PDF y Lectura", anio)
+        elif ext in self.EXTENSIONES_TXT:
+            return os.path.join("PDF y texto", "Texto Plano", anio)
+
+        elif ext in self.EXTENSIONES_ADOBE_ACROBAT:
+            return os.path.join("Archivos Adobe", "Acrobat", anio)
+
+        elif ext in self.EXTENSIONES_ADOBE_PHOTOSHOP:
+            return os.path.join("Archivos Adobe", "Photoshop", anio)
+
+        elif ext in self.EXTENSIONES_ADOBE_ILLUSTRATOR:
+            return os.path.join("Archivos Adobe", "Illustrator", anio)
+
+        elif ext in self.EXTENSIONES_ADOBE_INDESIGN:
+            return os.path.join("Archivos Adobe", "InDesign", anio)
+
+        elif ext in self.EXTENSIONES_ADOBE_PREMIERE:
+            return os.path.join("Archivos Adobe", "Premiere Pro", anio)
+
+        elif ext in self.EXTENSIONES_ADOBE_AFTER_EFFECTS:
+            return os.path.join("Archivos Adobe", "After Effects", anio)
+
+        elif ext in self.EXTENSIONES_ADOBE_AUDITION:
+            return os.path.join("Archivos Adobe", "Audition", anio)
+
+        elif ext in self.EXTENSIONES_ADOBE_LIGHTROOM:
+            return os.path.join("Archivos Adobe", "Lightroom", anio)
+
+        elif ext in self.EXTENSIONES_ADOBE_XD:
+            return os.path.join("Archivos Adobe", "Adobe XD", anio)
+
+        elif ext in self.EXTENSIONES_ADOBE_ANIMATE:
+            return os.path.join("Archivos Adobe", "Animate", anio)
+
+        elif ext in self.EXTENSIONES_AUTODESK_AUTOCAD:
+            return os.path.join("Archivos Autodesk", "AutoCAD", anio)
 
         elif ext in self.EXTENSIONES_EJECUTABLES:
             return os.path.join("Ejecutables e Instaladores", anio)
