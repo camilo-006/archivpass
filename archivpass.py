@@ -61,17 +61,29 @@ class AppBackupCorporativoElite(ctk.CTk):
         self.configure(fg_color=self.COLOR_BG)
 
         # --- CARGAR ÍCONO ---
-        try:
-            ruta_ico = obtener_ruta_recurso("icono.ico")
-            ruta_png = obtener_ruta_recurso("icono.png")
+# --- CARGAR ÍCONO (CORREGIDO PARA CUSTOMTKINTER) ---
+        def aplicar_icono():
+            try:
+                ruta_ico = obtener_ruta_recurso("icono.ico")
+                ruta_png = obtener_ruta_recurso("icono.png")
 
-            if os.path.exists(ruta_ico):
-                self.iconbitmap(ruta_ico)
-            elif os.path.exists(ruta_png):
-                self.img_icono = tk.PhotoImage(file=ruta_png)
-                self.iconphoto(True, self.img_icono)
-        except Exception as e:
-            print(f"No se pudo cargar el ícono: {e}")
+                if os.path.exists(ruta_ico):
+                    self.iconbitmap(ruta_ico)
+                    self.wm_iconbitmap(ruta_ico)
+                elif os.path.exists(ruta_png):
+                    try:
+                        from PIL import Image, ImageTk
+                        img = Image.open(ruta_png)
+                        self.img_icono = ImageTk.PhotoImage(img)
+                    except ImportError:
+                        self.img_icono = tk.PhotoImage(file=ruta_png)
+                    
+                    self.iconphoto(True, self.img_icono)
+            except Exception as e:
+                print(f"No se pudo cargar el ícono: {e}")
+
+        # Se ejecuta 200ms después para evitar que CustomTkinter borre el ícono al renderizar
+        self.after(200, aplicar_icono)
 
         # OPTIMIZACIÓN: Exclusiones como Conjuntos (Set) O(1)
         self.CARPETAS_IGNORADAS = {
