@@ -2,11 +2,13 @@ import os
 import shutil
 import sys
 import threading
+import time
 import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import ctypes
 import customtkinter as ctk
+from concurrent.futures import ThreadPoolExecutor
 
 # --- CONFIGURACIÓN DE APARIENCIA CUSTOMTKINTER ---
 ctk.set_appearance_mode("Dark")
@@ -32,7 +34,6 @@ class AppBackupCorporativoElite(ctk.CTk):
         # --- CONFIGURACIÓN DE TAMAÑO Y PANTALLA ---
         self.title("Backup Corporativo")
         
-        # Dimensiones y posicionamiento centrado
         ancho_ventana = 460
         alto_ventana = 640
 
@@ -67,13 +68,12 @@ class AppBackupCorporativoElite(ctk.CTk):
             if os.path.exists(ruta_ico):
                 self.iconbitmap(ruta_ico)
             elif os.path.exists(ruta_png):
-                # Alternativa con .png
                 self.img_icono = tk.PhotoImage(file=ruta_png)
                 self.iconphoto(True, self.img_icono)
         except Exception as e:
             print(f"No se pudo cargar el ícono: {e}")
 
-        # Exclusiones para perfiles de dominio
+        # OPTIMIZACIÓN: Exclusiones como Conjuntos (Set) O(1)
         self.CARPETAS_IGNORADAS = {
             'temp', 'tmp', 'cache', 'caches', 'gpucache', 'code cache', 
             'crashdumps', 'inetcache', 'webcache', '$recycle.bin', 
@@ -87,39 +87,40 @@ class AppBackupCorporativoElite(ctk.CTk):
 
         self.EXTENSIONES_IGNORADAS = {'.tmp', '.dmp', '.bak', '.crdownload', '.partial', '.lock'}
 
-        # Variables de control
+        # Variables de control y multithreading
         self.lista_rutas_origen = []
         self.ruta_destino = tk.StringVar()
         self.modo_existente = tk.StringVar(value="omitir")
         self.organizar_por_tipo = tk.BooleanVar(value=True)
         self.cancelar_proceso = False
+        self.lock = threading.Lock()
+        self.ultima_actualizacion_ui = 0
         
-        # Mapeo de Categorías
-        self.EXTENSIONES_OFFICE_WORD = ['.doc', '.docx', '.odt']
-        self.EXTENSIONES_OFFICE_EXCEL = ['.xls', '.xlsx', '.csv', '.ods']
-        self.EXTENSIONES_OFFICE_PPT = ['.ppt', '.pptx', '.odp']
+        # OPTIMIZACIÓN: Mapeo de Categorías en Conjuntos (Set) O(1)
+        self.EXTENSIONES_OFFICE_WORD = {'.doc', '.docx', '.odt'}
+        self.EXTENSIONES_OFFICE_EXCEL = {'.xls', '.xlsx', '.csv', '.ods'}
+        self.EXTENSIONES_OFFICE_PPT = {'.ppt', '.pptx', '.odp'}
 
-        self.EXTENSIONES_PDF = ['.pdf', '.epub']
-        self.EXTENSIONES_TXT = ['.txt', '.rtf', '.log']
+        self.EXTENSIONES_PDF = {'.pdf', '.epub'}
+        self.EXTENSIONES_TXT = {'.txt', '.rtf', '.log'}
 
-        #suite de adobe
-        self.EXTENSIONES_ADOBE_PHOTOSHOP = ['.psd', '.psb']
-        self.EXTENSIONES_ADOBE_ILLUSTRATOR = ['.ai', '.ait', '.eps']
-        self.EXTENSIONES_ADOBE_INDESIGN = ['.indd', '.indt', '.idml']
-        self.EXTENSIONES_ADOBE_ACROBAT = ['.pdf']
-        self.EXTENSIONES_ADOBE_PREMIERE = ['.prproj']
-        self.EXTENSIONES_ADOBE_AFTER_EFFECTS = ['.aep', '.aet']
-        self.EXTENSIONES_ADOBE_AUDITION = ['.sesx']
-        self.EXTENSIONES_ADOBE_LIGHTROOM = ['.lrcat', '.dng']
-        self.EXTENSIONES_ADOBE_XD = ['.xd']
-        self.EXTENSIONES_ADOBE_ANIMATE = ['.fla', '.xfl']
+        self.EXTENSIONES_ADOBE_PHOTOSHOP = {'.psd', '.psb'}
+        self.EXTENSIONES_ADOBE_ILLUSTRATOR = {'.ai', '.ait', '.eps'}
+        self.EXTENSIONES_ADOBE_INDESIGN = {'.indd', '.indt', '.idml'}
+        self.EXTENSIONES_ADOBE_ACROBAT = {'.pdf'}
+        self.EXTENSIONES_ADOBE_PREMIERE = {'.prproj'}
+        self.EXTENSIONES_ADOBE_AFTER_EFFECTS = {'.aep', '.aet'}
+        self.EXTENSIONES_ADOBE_AUDITION = {'.sesx'}
+        self.EXTENSIONES_ADOBE_LIGHTROOM = {'.lrcat', '.dng'}
+        self.EXTENSIONES_ADOBE_XD = {'.xd'}
+        self.EXTENSIONES_ADOBE_ANIMATE = {'.fla', '.xfl'}
 
-        self.EXTENSIONES_AUTODESK_AUTOCAD = ['.dwg', '.dxf', '.dwt', '.dwf']
+        self.EXTENSIONES_AUTODESK_AUTOCAD = {'.dwg', '.dxf', '.dwt', '.dwf'}
 
-        self.EXTENSIONES_EJECUTABLES = ['.exe', '.msi', '.bat', '.cmd', '.iso', '.ps1']
-        self.EXTENSIONES_ACCESOS = ['.lnk', '.url']
-        self.EXTENSIONES_CORREO = ['.pst', '.ost', '.eml', '.msg', '.oft', '.mbox']
-        self.EXTENSIONES_COMPRIMIDOS = ['.zip', '.rar', '.7z', '.tar', '.gz']
+        self.EXTENSIONES_EJECUTABLES = {'.exe', '.msi', '.bat', '.cmd', '.iso', '.ps1'}
+        self.EXTENSIONES_ACCESOS = {'.lnk', '.url'}
+        self.EXTENSIONES_CORREO = {'.pst', '.ost', '.eml', '.msg', '.oft', '.mbox'}
+        self.EXTENSIONES_COMPRIMIDOS = {'.zip', '.rar', '.7z', '.tar', '.gz'}
 
         # Métricas
         self.exitos = []
@@ -141,7 +142,6 @@ class AppBackupCorporativoElite(ctk.CTk):
         return False
 
     def crear_tarjeta(self, parent):
-        """ Helper para crear tarjetas con esquinas redondeadas y bordes oscuros """
         return ctk.CTkFrame(
             parent,
             fg_color=self.COLOR_CARD,
@@ -151,9 +151,6 @@ class AppBackupCorporativoElite(ctk.CTk):
         )
 
     def crear_interfaz(self):
-        # -----------------------------------------------------------------
-        # 1. PIE DE PÁGINA FIJO (FOOTER) - BOTÓN PRINCIPAL
-        # -----------------------------------------------------------------
         self.frame_acciones = ctk.CTkFrame(self, fg_color="transparent")
         self.frame_acciones.pack(side="bottom", fill="x", pady=15, padx=20)
 
@@ -182,9 +179,6 @@ class AppBackupCorporativoElite(ctk.CTk):
             command=self.solicitar_cancelacion
         )
 
-        # -----------------------------------------------------------------
-        # 2. CONTENEDOR DESPLAZABLE (SCROLLABLE FRAME)
-        # -----------------------------------------------------------------
         self.scroll_frame = ctk.CTkScrollableFrame(
             self,
             fg_color=self.COLOR_BG,
@@ -331,25 +325,21 @@ class AppBackupCorporativoElite(ctk.CTk):
         frame_grid_m.pack(fill="x", padx=14, pady=(0, 12))
         frame_grid_m.grid_columnconfigure((0, 1), weight=1)
 
-        # 1. Copiados
         f_exito = ctk.CTkFrame(frame_grid_m, fg_color="#0E2A1B", border_color="#1B5433", border_width=1, corner_radius=6)
         f_exito.grid(row=0, column=0, sticky="ew", padx=(0, 6), pady=4)
         self.lbl_m_exito = ctk.CTkLabel(f_exito, text="Copiados: 0", font=ctk.CTkFont(family="Consolas", size=11, weight="bold"), text_color="#22C55E")
         self.lbl_m_exito.pack(pady=6)
 
-        # 2. Renombrados
         f_renombrados = ctk.CTkFrame(frame_grid_m, fg_color="#0B2136", border_color="#15426B", border_width=1, corner_radius=6)
         f_renombrados.grid(row=0, column=1, sticky="ew", padx=(6, 0), pady=4)
         self.lbl_m_renombrados = ctk.CTkLabel(f_renombrados, text="Renombrados: 0", font=ctk.CTkFont(family="Consolas", size=11, weight="bold"), text_color="#3B82F6")
         self.lbl_m_renombrados.pack(pady=6)
 
-        # 3. Errores
         f_errores = ctk.CTkFrame(frame_grid_m, fg_color="#2A0E11", border_color="#541B21", border_width=1, corner_radius=6)
         f_errores.grid(row=1, column=0, sticky="ew", padx=(0, 6), pady=4)
         self.lbl_m_errores = ctk.CTkLabel(f_errores, text="Errores: 0", font=ctk.CTkFont(family="Consolas", size=11, weight="bold"), text_color="#EF4444")
         self.lbl_m_errores.pack(pady=6)
 
-        # 4. Volumen
         f_peso = ctk.CTkFrame(frame_grid_m, fg_color="#141F18", border_color="#23382B", border_width=1, corner_radius=6)
         f_peso.grid(row=1, column=1, sticky="ew", padx=(6, 0), pady=4)
         self.lbl_m_peso = ctk.CTkLabel(f_peso, text="Volumen: 0 Bytes", font=ctk.CTkFont(family="Consolas", size=11, weight="bold"), text_color=self.COLOR_TEXT)
@@ -380,17 +370,14 @@ class AppBackupCorporativoElite(ctk.CTk):
         )
         self.txt_log.pack(fill="x", expand=True, padx=14, pady=(0, 12))
 
-        # Tags de colores en el componente subyacente
         self.txt_log._textbox.tag_config("INFO", foreground=self.COLOR_TEXT_MUTED)
         self.txt_log._textbox.tag_config("EXITO", foreground="#22C55E")
         self.txt_log._textbox.tag_config("OMITIDO", foreground=self.COLOR_GOLD_BRIGHT)
         self.txt_log._textbox.tag_config("RENOMBRADO", foreground="#3B82F6")
         self.txt_log._textbox.tag_config("ERROR", foreground="#EF4444")
 
-    # -----------------------------------------------------------------
-    # MÉTODOS DE LA APLICACIÓN (MANTENIDOS EXACTAMENTE IGUAL)
-    # -----------------------------------------------------------------
     def log_mensaje(self, texto, categoria="INFO"):
+        """ Agrega log de forma segura """
         self.txt_log.configure(state="normal")
         hora = datetime.datetime.now().strftime("%H:%M:%S")
         self.txt_log.insert(tk.END, f"[{hora}] {texto}\n", categoria)
@@ -412,9 +399,9 @@ class AppBackupCorporativoElite(ctk.CTk):
         except Exception:
             anio = "Sin_Anio"
 
-        if ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico']:
+        if ext in {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico'}:
             return os.path.join("Multimedia", "Imagenes", anio)
-        elif ext in ['.mp4', '.avi', '.mkv', '.mov', '.mp3', '.wav', '.aac', '.flac']:
+        elif ext in {'.mp4', '.avi', '.mkv', '.mov', '.mp3', '.wav', '.aac', '.flac'}:
             return os.path.join("Multimedia", "Videos y Audio", anio)
 
         elif ext in self.EXTENSIONES_OFFICE_WORD:
@@ -431,31 +418,22 @@ class AppBackupCorporativoElite(ctk.CTk):
 
         elif ext in self.EXTENSIONES_ADOBE_ACROBAT:
             return os.path.join("Archivos Adobe", "Acrobat", anio)
-
         elif ext in self.EXTENSIONES_ADOBE_PHOTOSHOP:
             return os.path.join("Archivos Adobe", "Photoshop", anio)
-
         elif ext in self.EXTENSIONES_ADOBE_ILLUSTRATOR:
             return os.path.join("Archivos Adobe", "Illustrator", anio)
-
         elif ext in self.EXTENSIONES_ADOBE_INDESIGN:
             return os.path.join("Archivos Adobe", "InDesign", anio)
-
         elif ext in self.EXTENSIONES_ADOBE_PREMIERE:
             return os.path.join("Archivos Adobe", "Premiere Pro", anio)
-
         elif ext in self.EXTENSIONES_ADOBE_AFTER_EFFECTS:
             return os.path.join("Archivos Adobe", "After Effects", anio)
-
         elif ext in self.EXTENSIONES_ADOBE_AUDITION:
             return os.path.join("Archivos Adobe", "Audition", anio)
-
         elif ext in self.EXTENSIONES_ADOBE_LIGHTROOM:
             return os.path.join("Archivos Adobe", "Lightroom", anio)
-
         elif ext in self.EXTENSIONES_ADOBE_XD:
             return os.path.join("Archivos Adobe", "Adobe XD", anio)
-
         elif ext in self.EXTENSIONES_ADOBE_ANIMATE:
             return os.path.join("Archivos Adobe", "Animate", anio)
 
@@ -524,16 +502,25 @@ class AppBackupCorporativoElite(ctk.CTk):
         self.barra_progreso.set(0)
         self.lbl_estado.configure(text="Estado: En espera de configuración...", text_color=self.COLOR_TEXT_MUTED)
         
-        # Reset de métricas visuales
         self.lbl_m_exito.configure(text="Copiados: 0")
         self.lbl_m_renombrados.configure(text="Renombrados: 0")
         self.lbl_m_errores.configure(text="Errores: 0")
         self.lbl_m_peso.configure(text="Volumen: 0 Bytes")
 
-        # Restaurar botones
         self.btn_cancelar.pack_forget()
         self.btn_cancelar.configure(state="normal", fg_color=self.COLOR_RED)
         self.btn_iniciar.pack(fill="x")
+
+    def actualizar_ui_progreso(self, procesados, total, nombre_archivo):
+        """ OPTIMIZACIÓN: Refresco controlado de la interfaz gráfica """
+        progreso = procesados / total
+        self.barra_progreso.set(progreso)
+        nombre_visible = nombre_archivo if len(nombre_archivo) <= 35 else nombre_archivo[:32] + "..."
+        self.lbl_estado.configure(text=f"⚡ Copiando: {nombre_visible}", text_color=self.COLOR_GOLD_BRIGHT)
+        self.lbl_m_exito.configure(text=f"Copiados: {len(self.exitos)}")
+        self.lbl_m_renombrados.configure(text=f"Renombrados: {self.ya_existian}")
+        self.lbl_m_errores.configure(text=f"Errores: {len(self.errores)}")
+        self.lbl_m_peso.configure(text=f"Volumen: {self.formatear_peso(self.bytes_transferidos)}")
 
     def proceso_copiado(self):
         destino_raw = self.ruta_destino.get()
@@ -555,47 +542,22 @@ class AppBackupCorporativoElite(ctk.CTk):
         self.ya_existian = 0
         self.bytes_transferidos = 0
 
-        # Ocultar Iniciar y Mostrar Cancelar
         self.btn_iniciar.pack_forget()
         self.btn_cancelar.pack(fill="x")
-        self.lbl_estado.configure(text="🔍 Analizando y contabilizando archivos...", text_color=self.COLOR_GOLD)
+        self.lbl_estado.configure(text="🔍 Escaneando origen y planificando tareas...", text_color=self.COLOR_GOLD)
 
         try:
             destino = self.normalizar_ruta_larga(destino_raw)
 
-            # --- 1. CONTEO DE ARCHIVOS ---
-            total_archivos = 0
+            # --- OPTIMIZACIÓN 1: UN SOLO PASO DE ESCANEO Y CONTRUCCIÓN DE TAREAS ---
+            tareas = []
             for origen_item in self.lista_rutas_origen:
                 origen_norm = self.normalizar_ruta_larga(origen_item)
                 for raiz, dirs, archivos in os.walk(origen_norm):
-                    dirs[:] = [d for d in dirs if d.lower() not in self.CARPETAS_IGNORADAS]
-                    archivos_validos = [a for a in archivos if not self.es_archivo_ignorado(a)]
-                    total_archivos += len(archivos_validos)
-
-            if total_archivos == 0:
-                self.lbl_estado.configure(text="⚠️ Los orígenes seleccionados no contienen archivos válidos.", text_color=self.COLOR_RED)
-                self.log_mensaje("⚠️ No se encontraron archivos válidos para respaldar.", "ERROR")
-                self.resetear_interfaz()
-                return
-
-            self.log_mensaje(f"Análisis completado: {total_archivos} archivo(s) válido(s) detectado(s).", "INFO")
-            archivos_procesados = 0
-
-            # --- 2. BUCLE PRINCIPAL DE COPIADO ---
-            for origen_item in self.lista_rutas_origen:
-                if self.cancelar_proceso: break
-
-                origen_norm = self.normalizar_ruta_larga(origen_item)
-                
-                for raiz, dirs, archivos in os.walk(origen_norm):
-                    if self.cancelar_proceso: break
-                    
                     dirs[:] = [d for d in dirs if d.lower() not in self.CARPETAS_IGNORADAS]
                     ruta_relativa = os.path.relpath(raiz, origen_norm)
 
                     for archivo in archivos:
-                        if self.cancelar_proceso: break
-                        
                         if self.es_archivo_ignorado(archivo):
                             continue
 
@@ -610,57 +572,91 @@ class AppBackupCorporativoElite(ctk.CTk):
                             else:
                                 carpeta_destino_actual = os.path.join(destino, ruta_relativa)
 
-                        if not os.path.exists(carpeta_destino_actual):
-                            try: os.makedirs(carpeta_destino_actual)
-                            except Exception: pass
+                        tareas.append((ruta_archivo_origen, carpeta_destino_actual, archivo))
 
-                        ruta_archivo_destino = os.path.join(carpeta_destino_actual, archivo)
+            total_archivos = len(tareas)
+
+            if total_archivos == 0:
+                self.lbl_estado.configure(text="⚠️ Los orígenes seleccionados no contienen archivos válidos.", text_color=self.COLOR_RED)
+                self.log_mensaje("⚠️ No se encontraron archivos válidos para respaldar.", "ERROR")
+                self.resetear_interfaz()
+                return
+
+            self.log_mensaje(f"Análisis completado: {total_archivos} archivo(s) detectado(s). Iniciando transferencia...", "INFO")
+            
+            archivos_procesados = 0
+            destinos_ocupados = set()
+
+            # --- TRABAJADOR MULTIHILO PARA COPIADO PARALELO ---
+            def copiar_tarea(tarea):
+                nonlocal archivos_procesados
+                if self.cancelar_proceso:
+                    return
+
+                ruta_origen, carpeta_destino, archivo = tarea
+
+                if not os.path.exists(carpeta_destino):
+                    try: os.makedirs(carpeta_destino, exist_ok=True)
+                    except Exception: pass
+
+                # Control de nombres duplicados de forma segura ante hilos concurrentes
+                with self.lock:
+                    base_nombre, ext = os.path.splitext(archivo)
+                    contador = 0
+                    fue_renombrado = False
+                    ruta_archivo_destino = os.path.join(carpeta_destino, archivo)
+
+                    while os.path.exists(ruta_archivo_destino) or ruta_archivo_destino in destinos_ocupados:
+                        contador += 1
+                        nuevo_nombre = f"{base_nombre}({contador}){ext}"
+                        ruta_archivo_destino = os.path.join(carpeta_destino, nuevo_nombre)
+                        fue_renombrado = True
+
+                    destinos_ocupados.add(ruta_archivo_destino)
+
+                try:
+                    peso_bytes = os.path.getsize(ruta_origen)
+                    peso_legible = self.formatear_peso(peso_bytes)
+                except Exception:
+                    peso_bytes = 0
+                    peso_legible = "Desconocido"
+
+                nombre_archivo_final = os.path.basename(ruta_archivo_destino)
+
+                try:
+                    # Copiado rápido en hilo
+                    shutil.copy2(ruta_origen, ruta_archivo_destino)
+
+                    with self.lock:
+                        self.exitos.append((nombre_archivo_final, peso_legible))
+                        self.bytes_transferidos += peso_bytes
+                        if fue_renombrado:
+                            self.ya_existian += 1
 
                         archivos_procesados += 1
-                        self.barra_progreso.set(archivos_procesados / total_archivos)
+                        ahora = time.time()
 
-                        try:
-                            peso_bytes = os.path.getsize(ruta_archivo_origen)
-                            peso_legible = self.formatear_peso(peso_bytes)
-                        except Exception:
-                            peso_bytes = 0
-                            peso_legible = "Desconocido"
+                        # OPTIMIZACIÓN 2: THROTTLING (Solo refresca UI máximo cada 80ms o al terminar)
+                        if ahora - self.ultima_actualizacion_ui > 0.08 or archivos_procesados == total_archivos:
+                            self.ultima_actualizacion_ui = ahora
+                            self.actualizar_ui_progreso(archivos_procesados, total_archivos, nombre_archivo_final)
 
-                        # --- GESTIÓN DE DUPLICADOS ---
-                        base_nombre, ext = os.path.splitext(archivo)
-                        contador = 0
-                        fue_renombrado = False
+                        if fue_renombrado:
+                            self.log_mensaje(f"[RENOMBRADO] {archivo} ➔ {nombre_archivo_final} ({peso_legible})", "RENOMBRADO")
+                        else:
+                            self.log_mensaje(f"[COPIADO] {nombre_archivo_final} ({peso_legible})", "EXITO")
 
-                        while os.path.exists(ruta_archivo_destino):
-                            contador += 1
-                            nuevo_nombre = f"{base_nombre}({contador}){ext}"
-                            ruta_archivo_destino = os.path.join(carpeta_destino_actual, nuevo_nombre)
-                            fue_renombrado = True
+                except Exception as e:
+                    motivo = str(e).split("]")[-1].strip()
+                    with self.lock:
+                        self.errores.append((nombre_archivo_final, peso_legible, motivo))
+                        archivos_procesados += 1
+                        self.log_mensaje(f"[ERROR] {nombre_archivo_final}: {motivo}", "ERROR")
 
-                        nombre_archivo_final = os.path.basename(ruta_archivo_destino)
-                        nombre_visible = nombre_archivo_final if len(nombre_archivo_final) <= 35 else nombre_archivo_final[:32] + "..."
-                        self.lbl_estado.configure(text=f"⚡ Copiando: {nombre_visible}", text_color=self.COLOR_GOLD_BRIGHT)
-                        
-                        try:
-                            shutil.copy2(ruta_archivo_origen, ruta_archivo_destino)
-                            self.exitos.append((nombre_archivo_final, peso_legible))
-                            self.bytes_transferidos += peso_bytes
-                            
-                            self.lbl_m_exito.configure(text=f"Copiados: {len(self.exitos)}")
-                            self.lbl_m_peso.configure(text=f"Volumen: {self.formatear_peso(self.bytes_transferidos)}")
-
-                            if fue_renombrado:
-                                self.ya_existian += 1
-                                self.lbl_m_renombrados.configure(text=f"Renombrados: {self.ya_existian}")
-                                self.log_mensaje(f"[RENOMBRADO] {archivo} ➔ {nombre_archivo_final} ({peso_legible})", "RENOMBRADO")
-                            else:
-                                self.log_mensaje(f"[COPIADO] {nombre_archivo_final} ({peso_legible})", "EXITO")
-
-                        except Exception as e:
-                            motivo = str(e).split("]")[-1].strip()
-                            self.errores.append((nombre_archivo_final, peso_legible, motivo))
-                            self.lbl_m_errores.configure(text=f"Errores: {len(self.errores)}")
-                            self.log_mensaje(f"[ERROR] {nombre_archivo_final}: {motivo}", "ERROR")
+            # --- OPTIMIZACIÓN 3: EJECUCIÓN CON POOL DE HILOS (PARALELISMO MULTIHILO) ---
+            max_hilos = min(16, (os.cpu_count() or 4) * 2)
+            with ThreadPoolExecutor(max_workers=max_hilos) as executor:
+                executor.map(copiar_tarea, tareas)
 
             if self.cancelar_proceso:
                 self.log_mensaje("=== PROCESO CANCELADO POR EL USUARIO ===", "ERROR")
@@ -668,7 +664,7 @@ class AppBackupCorporativoElite(ctk.CTk):
                 self.lbl_estado.configure(text="Estado: Backup completado con éxito.", text_color="#25D366")
                 self.log_mensaje("=== RESPALDO COMPLETADO EXITOSAMENTE ===", "INFO")
 
-            # Reporte escrito en archivo de texto
+            # Generar reporte de texto
             ruta_txt_reporte = os.path.join(destino_raw, "reporte_transferencia.txt")
             try:
                 with open(ruta_txt_reporte, "w", encoding="utf-8") as f:
